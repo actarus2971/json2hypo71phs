@@ -2,39 +2,25 @@
 ##################################################################
 ##################################################################
 ##################################################################
-### This python3 code contains the parsing part only for full qml
-### to extrant any info e put it into a json object.
-### The json object is only a facility.
-### The key features are
-### - Arguments allow to input file or eventid for webservice
-### - Arguments have defaults
-### - The extracted informations are packed into a jason object 
-###   (originally designed by Ivano Carluccio) for any further use
-###
-### This part and the input arguments can be then completed by a
-### output formatter to anything
 
 ### IMPORTING LIBRARIES
 import os,argparse,subprocess,copy,pwd,socket,time
 import sys
-if sys.version_info[0] < 3:
-   reload(sys)
-   sys.setdefaultencoding('utf8')
 import math
 import decimal
 import json
-from xml.etree import ElementTree as ET
 from six.moves import urllib
 from datetime import datetime
+import pandas
 
 ## the imports of Obspy are all for version 1.1 and greater
-from obspy import read, UTCDateTime
-from obspy.core.event import Catalog, Event, Magnitude, Origin, Arrival, Pick
-from obspy.core.event import ResourceIdentifier, CreationInfo, WaveformStreamID
-try:
-    from obspy.core.event import read_events
-except:
-    from obspy.core.event import readEvents as read_events
+#from obspy import read, UTCDateTime
+#from obspy.core.event import Catalog, Event, Magnitude, Origin, Arrival, Pick
+#from obspy.core.event import ResourceIdentifier, CreationInfo, WaveformStreamID
+#try:
+#    from obspy.core.event import read_events
+#except:
+#    from obspy.core.event import readEvents as read_events
 
 class MyParser(argparse.ArgumentParser):
     def error(self, message):
@@ -44,11 +30,11 @@ class MyParser(argparse.ArgumentParser):
 
 def parseArguments():
         parser=MyParser()
-        parser.add_argument('--qmlin', help='Full path to qml event file')
-        parser.add_argument('--eventid', help='INGV event id')
+        parser.add_argument('--jsonin', help='Full path to json event file')
+        parser.add_argument('--originid', help='INGV event id')
         parser.add_argument('--version', default='preferred',help="Agency coding origin version type (default: %(default)s)\n preferred,all, or an integer for known version numbers")
-        parser.add_argument('--conf', default='./ws_agency_route.conf', help="needed with --eventid\n agency webservices routes list type (default: %(default)s)")
-        parser.add_argument('--agency', default='ingv', help="needed with --eventid\n agency to query for (see routes list in .conf file) type (default: %(default)s)")
+        parser.add_argument('--conf', default='./ws_agency_route.conf', help="needed with --originid\n agency webservices routes list type (default: %(default)s)")
+        parser.add_argument('--agency', default='ingv', help="needed with --originid\n agency to query for (see routes list in .conf file) type (default: %(default)s)")
         if len(sys.argv) <= 1:
             parser.print_help()
             sys.exit(1)
@@ -229,10 +215,9 @@ def json_data_structure():
             }
     return event,hypocenter,magnitude,amplitude,phase
     
-# Get QuakeML Full File from webservice
-def getqml(event_id,bu,op):
-    urltext=bu + "query?eventid=" + str(event_id) + op
-    #urltext=bu + "query?eventid=" + str(event_id) + "&includeallmagnitudes=true&includeallorigins=true&includearrivals=true&includeallstationsmagnitudes=true"
+# Get the json file from the caravel webservice
+def getjson(origin_id,bu,op):
+    urltext=bu + "?originid=" + str(origin_id) + op
     try:
         req = urllib.request.Request(url=urltext)
         try:
@@ -246,12 +231,9 @@ def getqml(event_id,bu,op):
             sys.exit(1)
     except Exception as e:
         print("Query in Request")
-        if sys.version_info[0] >= 3:
-           print(e.read()) 
-        else:
-           print(str(e))
+        print(e.read()) 
         sys.exit(1)
-    return res.read(),urltext
+    return res.read().decode('utf-8','replace'),urltext
 
 #################### END OF QML PARSER COMMON PART ###########################
 ###### FROM HERE ON ADD ON PURPOSE OUTPUT FORMATTERS #########################
@@ -439,16 +421,20 @@ args=parseArguments()
 self_software=sys.argv[0]
 
 # If a qml input file is given, file_qml is the full or relative path_to_file
-if args.qmlin:
-   qml_ans=args.qmlin
-   url_to_description = "File converted from qml file " + args.qmlin.split(os.sep)[-1]
+if args.jsonin:
+   response=args.jsonin
+   url_to_description = "File converted from json file " + args.jsonin.split(os.sep)[-1]
 
 # This is the version that will be retrieved from the qml
 orig_ver=args.version
 
-# If qmlin is not given and an eventid is given, file_qml is the answer from a query and the configuration file is needed
-if args.eventid:
-   eid=args.eventid
+if not args.jsonin and not args.originid:
+       print("Either --jsonin or --originid are needed")
+       sys.exit()
+
+# If jsonin is not given and an originid is given, file_json is the answer from a query and the configuration file is needed
+if args.originid:
+   oid=args.originid
    # Now loading the configuration file
    if os.path.exists(args.conf) and os.path.getsize(args.conf) > 0:
       paramfile=args.conf
@@ -462,70 +448,29 @@ if args.eventid:
    try:
        ws_route = get_config_dictionary(confObj, agency_name)
    except Exception as e:
-       if sys.version_info[0] >= 3:
-          print(e) 
-       else:
-          print(str(e))
+       print(e) 
        sys.exit(1)
    # Now requesting the qml file from the webservice
-   qml_ans, url_to_description = getqml(eid,ws_route['base_url'],ws_route['in_options'])
-   if not qml_ans or len(qml_ans) == 0:
+   response, url_to_description = getjson(oid,ws_route['base_url'],ws_route['in_options'])
+   if not response or len(response) == 0:
       print("Void answer with no error handling by the webservice")
       sys.exit(1)
-
-if not args.qmlin and not args.eventid:
-       print("Either --qmlin or --eventid are needed")
-       sys.exit()
+   for o in json.loads(response)['data']['event']['origins']:
+       if o['provenance']['version'] == 'BULLETIN-INGV' and o['type_origin']['version_value'] == 1000:
+          print(o['provenance'])
 
 # Now reading in qml to obspy catalog
-try:
-    cat = read_events(qml_ans)
-except Exception as e:
-    if sys.version_info[0] >= 3:
-       print(e) 
-    else:
-       print(str(e))
-       print("Error reading cat")
-    sys.exit(1)
-###################################
-# Lista delle chiavi del full qml #
-###################################
-# focal_mechanisms ----------< Ok
-# origins ----------< Ok
-# picks ----------< Ok
-# magnitudes ----------< Ok
-# station_magnitudes ----------< Ok
-# amplitudes ----------< Ok
-
-# resource_id ----------< Ok
-# creation_info ----------< Ok
-# event_descriptions ----------< Ok
-# event_type ----------< Ok
-# event_type_certainty ----------< Ok
-# comments ----------< Ok
-# _format ----------< Ok
-
-# ----------------------------- #
-# i seguenti non li parso       #
-# preferred_magnitude_id        #
-# preferred_focal_mechanism_id  #
-# preferred_origin_id           #
-# ----------------------------- #
 
 event,hypocenter,magnitude,amplitude,phase = json_data_structure()
-#print(event,hypocenter,magnitude,amplitude,phase)
 EARTH_RADIUS=6371 # Defined after eventdb setup (valentino.lauciani@ingv.it)
 DEGREE_TO_KM=111.1949 # Defined after eventdb setup (valentino.lauciani@ingv.it)
 
 
 
 ########## FROM HERE THE PART OF MAIN HANDLING SPECIFICALLY TO OUTPUT HYPO71PHS
+## This part should match the json FROM quakedb with the json strutcture and then the rest should work as the forked script
 for ev in cat:
     evdict=dict(ev)
-    #for k, v in evdict.items():
-        #print(k, v)
-    #pref_mag=evdict['magnitudes'][0]['mag']
-    #region=evdict['event_descriptions'][0].text
     eid=str(evdict['resource_id']).split('=')[-1]
     
     # Ottengo gli ID delle versioni preferite
@@ -537,15 +482,6 @@ for ev in cat:
     if orig_ver.lower() == 'preferred':
        orig_ver_id = pref_or_id
        #print("Preferred was asked: ",orig_ver_id)
-    #print('----------- Event Info Start --------')
-    #print(evdict['resource_id'])
-    #print(evdict['creation_info'])
-    #print(evdict['event_descriptions'])
-    #print(evdict['event_type'])
-    #print(evdict['event_type_certainty'])
-    #print(evdict['comments'])
-    #print(evdict['_format'])
-    #print('----------- Event Info End ----------')
     eo = copy.deepcopy(event) 
     eo["id_locator"] = str(evdict['resource_id']).split('=')[-1]
     eo["type_event"] = evdict['event_type']
