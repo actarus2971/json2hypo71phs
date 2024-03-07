@@ -426,7 +426,7 @@ if args.jsonin:
    url_to_description = "File converted from json file " + args.jsonin.split(os.sep)[-1]
 
 # This is the version that will be retrieved from the qml
-orig_ver=args.version
+orig_ver=int(args.version)
 
 if not args.jsonin and not args.originid:
        print("Either --jsonin or --originid are needed")
@@ -455,338 +455,322 @@ if args.originid:
    if not response or len(response) == 0:
       print("Void answer with no error handling by the webservice")
       sys.exit(1)
-   for o in json.loads(response)['data']['event']['origins']:
-       if o['provenance']['version'] == 'BULLETIN-INGV' and o['type_origin']['version_value'] == 1000:
-          print(o['provenance'])
+   full_event = json.loads(response)
+   for o in full_event['data']['event']['origins']:
+       if o['type_origin']['version_name'] == 'bulletin fm' and o['type_origin']['version_value'] == orig_ver and o['provenance']['description'] == 'PFX interactive revision':
+          origin_found=True
+          origin=o
+          break
+       else:
+          origin_found=False
 
-# Now reading in qml to obspy catalog
+########## FROM HERE THE PART OF MAIN HANDLING SPECIFICALLY TO OUTPUT HYPO71PHS
+## This part should match the json FROM quakedb with the json strutcture and then the rest should work as the forked script
 
 event,hypocenter,magnitude,amplitude,phase = json_data_structure()
 EARTH_RADIUS=6371 # Defined after eventdb setup (valentino.lauciani@ingv.it)
 DEGREE_TO_KM=111.1949 # Defined after eventdb setup (valentino.lauciani@ingv.it)
 
-
-
-########## FROM HERE THE PART OF MAIN HANDLING SPECIFICALLY TO OUTPUT HYPO71PHS
-## This part should match the json FROM quakedb with the json strutcture and then the rest should work as the forked script
-for ev in cat:
-    evdict=dict(ev)
-    eid=str(evdict['resource_id']).split('=')[-1]
-    
+if origin_found:
     # Ottengo gli ID delle versioni preferite
-    pref_or_id=str(evdict['preferred_origin_id']).split('=')[-1]
-    pref_ma_id=str(evdict['preferred_magnitude_id']).split('=')[-1]
-    pref_fm_id=str(evdict['preferred_focal_mechanism_id']).split('=')[-1]
-    # Se non la versione cercata e' la preferita, il numero diversione diventa l'id della preferita
-    orig_ver_id=False
-    if orig_ver.lower() == 'preferred':
-       orig_ver_id = pref_or_id
-       #print("Preferred was asked: ",orig_ver_id)
+    eid=full_event['data']['event']['id']
+    id_localspace=full_event['data']['event']['id_localspace']
+    event_group_id=full_event['data']['event']['event_group_id']
+    preferred_origin_id=full_event['data']['event']['preferred_origin_id']
+    preferred_magnitude_id=full_event['data']['event']['preferred_magnitude_id']
+    type_event=full_event['data']['event']['type_event']
+    localspace_name=full_event['data']['event']['localspace']['name']
+    provenance_name_=full_event['data']['event']['provenance']['name']
     eo = copy.deepcopy(event) 
-    eo["id_locator"] = str(evdict['resource_id']).split('=')[-1]
-    eo["type_event"] = evdict['event_type']
-#CreationInfo(agency_id='INGV', author='hew1_mole#MOD_EQASSEMBLE', creation_time=UTCDateTime(2012, 5, 29, 7, 19, 57))
-    eo["provenance_name"] = evdict['creation_info']['agency_id']
-    eo["provenance_instance"] = evdict['creation_info']['author']
-    #print(eo)
-    version_found=False
-    for origin in evdict['origins']:
-        or_id=str(origin['resource_id']).split('=')[-1]
-        # Se esiste una versione dentro le creation info allora si legge il valore altrimetni e' falso.
-        try:
-            or_info_version = origin['creation_info']['version']
-        except:
-            or_info_version = False
-        # Se la versione chiesta e' la preferita vince il primo check che e' fatto sull'origin id e non sul numero di versione
-        if str(orig_ver_id) == or_id or or_info_version == str(orig_ver) or str(orig_ver) == 'all' or str(orig_ver) == 'All' or str(orig_ver) == 'ALL':
-           or_id_to_write=or_id
-           version_name=or_info_version
-           version_found=True
-           #print(version_found,orig_ver_id)
-           #for k, v in origin.items():
-           #    print(k,v)
-           #print(origin)
-           oo = copy.deepcopy(hypocenter)
-           try:
-               oo['ot'] = str(origin['time'])
-           except:
-               pass
-           try:
-               oo['lat'] = origin['latitude']
-           except:
-               pass
-           try:
-               oo['lon'] = origin['longitude']
-           except:
-               pass
-           try:
-               oo['depth'] = origin['depth']
-           except:
-               pass
-           if origin['depth_type'] == 'from location':
-              oo['fix_depth'] = 0
-           else:
-              oo['fix_depth'] = 1
-           # space time coordinates errors
-           try:
-               oo['err_ot']=origin['time_errors']['uncertainty']
-           except:
-               pass
-           try:
-               oo['err_lat']=(float(origin['latitude_errors']['uncertainty'])*(EARTH_RADIUS*2*math.pi))/360. # from degrees to km
-           except:
-               pass
-           try:
-               oo['err_lon']=(float(origin['longitude_errors']['uncertainty'])*EARTH_RADIUS*math.cos(float(origin['latitude'])*2*(math.pi/360.))*2*math.pi)/360. # from degrees to km
-           except:
-               pass
-           try:
-               oo['err_depth']=float(origin['depth_errors']['uncertainty'])/1000.
-           except:
-               pass
-           try:
-               oo['err_h'] = float(origin['origin_uncertainty']['horizontal_uncertainty'])/1000.
-           except:
-               pass
-           try:
-               oo['err_z'] = oo['err_depth']
-           except:
-               pass
-           ######### i prossimi tre valori commentati sono legati in modo NON bidirezionale ai valori dell'ellissoide
-           #1 min_ho_un = origin['origin_uncertainty']['min_horizontal_uncertainty']
-           #2 max_ho_un = origin['origin_uncertainty']['max_horizontal_uncertainty']
-           #3 az_max_ho_un = origin['origin_uncertainty']['azimuth_max_horizontal_uncertainty']
-           #4 pref_desc = origin['origin_uncertainty']['preferred_description']
-           try:
-               oo['confidence_lev'] = origin['origin_uncertainty']['confidence_level']
-           except:
-               pass
-           try:
-               oo['min_distance'] = origin['quality']['minimum_distance']
-           except:
-               pass
-           try:
-               oo['max_distance'] = origin['quality']['maximum_distance']
-           except:
-               pass
-           try:
-               oo['azim_gap'] = origin['quality']['azimuthal_gap']
-           except:
-               pass
-           try:
-               oo['rms'] = origin['quality']['standard_error']
-           except:
-               pass
-           try:
-               oo['model'] = origin['earth_model_id']
-           except:
-               pass
-           oo['provenance_name'] = origin['creation_info']['agency_id']
-           oo['provenance_istance'] = origin['creation_info']['author']
-           #oo[''] = origin['quality']['']
-           #sys.exit()
-    #    print(origin['creation_info']['version'])
-           P_count_all=0
-           S_count_all=0
-           P_count_use=0
-           S_count_use=0
-           Pol_count=0
-           pick_P = {}
-           pick_S = {}
-           arrivals=list(origin['arrivals'])
-           for pick in evdict['picks']:
-               po = copy.deepcopy(phase)
-               #for k, v in pick.items():
-               #    print(k,v)
-               po['arr_time_is_used']=0
-               pick_id=str(pick['resource_id']).split('=')[-1]
-               try:
-                   po['isc_code']      = pick['phase_hint']
-               except:
-                   pass
-               try:
-                   po['scnl_net']      = pick['waveform_id']['network_code']
-               except:
-                   pass
-               try:
-                   po['scnl_sta']      = pick['waveform_id']['station_code']
-               except:
-                   pass
-               try:
-                   po['scnl_cha']      = pick['waveform_id']['channel_code']
-               except:
-                   pass
-               try:
-                   po['arrival_time']  = pick['time']
-               except:
-                   pass
-               try:
-                   po['weight_picker'] = convert_sispick_quality(pick['time_errors']['uncertainty'])
-               except:
-                   low_unc=float(pick['time_errors']['lower_uncertainty'])
-                   up_unc=float(pick['time_errors']['upper_uncertainty'])
-                   po['weight_picker'] = convert_sispick_quality((low_unc+up_unc))
-               try:
-                   po['firstmotion']   = polarity_qml2hypo(pick['polarity'])
-               except:
-                   pass
-               try:
-                   po['emersio']       = onset_qml2hypo(pick['onset'])
-               except:
-                   pass
-               try:
-                   if pick['waveform_id']['location_code'] == "":
-                      po['scnl_loc'] = "--"
-                   else:
-                      po['scnl_loc'] = pick['waveform_id']['location_code']
-               except:
-                   pass
-               try:
-                   if pick['polarity'] != "undecidable" and pick['polarity'] != "":
-                      Pol_count += 1
-               except:
-                   pass
-               #print(arrival)
-               #print(pick)
-               for arrival in arrivals:
-                   #for k, v in arrival.items():
-                   #    #print(k)
-                   #    print(k, v)
-                   a_pick_id=str(arrival['pick_id']).split('=')[-1]
-                   if a_pick_id == pick_id:
-                      try:
-                          po['arr_time_is_used']=1
-                      except:
-                          pass
-                      #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
-                      try:
-                          po['isc_code']      = arrival['phase'][0]
-                      except:
-                          pass
-                      #print("SI ",arrival['phase'],pick['time'],pick['waveform_id']['station_code'])
-                      try:
-                          po['ep_distance']   = float(arrival['distance'])*111.1949 # questo calcolo e' approssimato e non rapportato alla latitudone
-                      except:
-                          po['ep_distance']   = arrival['distance']
-                      try:
-                          po['azimut']        = arrival['azimuth']
-                      except:
-                          pass
-                      try:
-                          po['take_off']      = arrival['takeoff_angle']
-                      except:
-                          pass
-                      try:
-                          po['weight_phase_localization'] = arrival['time_weight']
-                      except:
-                          pass
-                      try:
-                          po['residual'] = arrival['time_residual']
-                      except:
-                          pass
-                      try:
-                          if arrival['phase'][0] == 'P' or arrival['phase'][0] == 'p':
-                             P_count_all += 1 
-                             if arrival['time_weight'] > 0:
-                                P_count_use += 1
-                      except:
-                          pass
-                      try:
-                          if arrival['phase'][0] == 'S' or arrival['phase'][0] == 's':
-                             S_count_all += 1 
-                             if arrival['time_weight'] > 0:
-                                S_count_use += 1
-                      except:
-                          pass
-               #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
-               # Writing the Pick into the picks dictionary based on the sta and net key (for reuse in formatting steps)
-               if po['arr_time_is_used'] == 1:
-                  pick_key= str(po['scnl_net']) + "_" + str(po['scnl_sta'])
-                  if str(po['isc_code']).lower() == 'p':
-                     pick_P[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
-                  if str(po['isc_code']).lower() == 's':
-                     pick_S[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
-                  oo["phases"].append(po)
-           oo['nph'] = P_count_use+S_count_use
-           oo['nph_s'] = S_count_use
-           oo['nph_tot'] = P_count_all+S_count_all
-           oo['nph_fm'] = Pol_count
-           amps = {}
-           for mag in evdict['magnitudes']:
-               m_or_id=str(mag['origin_id']).split('=')[-1]
-               if m_or_id == or_id:
-                  mm = copy.deepcopy(magnitude)
-                  #for k, v in mag.items():
-                  #    print(k, v)
-                  #pass
-                  mm['mag'] = mag['mag']
-                  mm['type_magnitude'] = mag['magnitude_type']
-                  mm['err'] = mag['mag_errors']['uncertainty']
-                  mm['nsta_used'] = mag['station_count']
-                  mm['provenance_name'] = mag['creation_info']['agency_id']
-                  mm['provenance_instance'] = mag['creation_info']['author']
-                  #print(mm['mag'],mm['type_magnitude'])
-                  for sta_mag in evdict['station_magnitudes']:
-                      sm_or_id=str(sta_mag['origin_id']).split('=')[-1]
-                      sm_am_id=str(sta_mag['amplitude_id']).split('=')[-1]
-                      if sm_or_id == or_id:
-                         #print(sta_mag)
-                         am = copy.deepcopy(amplitude)
-                         am['type_magnitude'] = sta_mag['station_magnitude_type']
-                         am['mag'] = sta_mag['mag']
-                         am['is_used'] = 1
-                         #print(sta_mag)
-                         #print(sta_mag['comments'])
-                         #for k, v in sta_mag.items():
-                         #    print(k, v)
-                         for amp in evdict['amplitudes']:
-                             #for k, v in amplitude.items():
-                             #    print(k, v)
-                             am_id=str(amp['resource_id']).split('=')[-1]
-                             am_or_id=str(sta_mag['amplitude_id']).split('=')[-1]
-                             if amp['unit'] == 'm':
-                                a_mul=1000.
-                             else:
-                                a_mul=1.
-                             if sm_am_id == am_id:
-                                try:
-                                    beg=float(amp['time_window']['begin'])
-                                    end=float(amp['time_window']['end'])
-                                    a_t_ref=amp['time_window']['reference']
-                                    if beg == 0 and end != 0:
-                                       am['time1'] = a_t_ref
-                                       am['amp1'] = str(float(amp['generic_amplitude']))
-                                       am['period1'] = amp['period']
-                                    elif beg != 0 and end == 0:
-                                       am['time2'] = a_t_ref
-                                       am['amp2'] = str(float(amp['generic_amplitude']))
-                                       am['period2'] = amp['period']
-                                except:
-                                    pass
-                                am['type_amplitude'] = amp['type']
-                                am['scnl_net'] = amp['waveform_id']['network_code']
-                                am['scnl_sta'] = amp['waveform_id']['station_code']
-                                am['scnl_cha'] = amp['waveform_id']['channel_code']
-                                am['scnl_loc'] = amp['waveform_id']['location_code']
-                                #print(am['scnl_net'],am['scnl_sta'],am['scnl_cha'])
-                                try:
-                                    am['provenance_instance'] = amp['creation_info']['author']
-                                except:
-                                    pass
-                                try:
-                                    am['provenance_name'] = amp['creation_info']['agency_id']
-                                except:
-                                    pass
-
-                                amps_key= str(am['scnl_net']) + "_" + str(am['scnl_sta']) + "_" + str(am['scnl_cha'])
-                                amps[str(amps_key)] = [str(am['scnl_sta']),str(am['scnl_net']),str(am['scnl_loc']),str(am['scnl_cha']),str(float(amp['generic_amplitude'])*float(a_mul)),str(amp['period'])]
-                         mm["amplitudes"].append(am)
-                  oo["magnitudes"].append(mm)
-           eo["data"]["event"]["hypocenters"].append(oo) # push oggetto oo in hypocenters
-    if not version_found:
-       sys.stderr.write("Chosen version doesnt match any origin id")
-       sys.exit(202) # Il codice 202 e' stato scelto per identificare il caso in cui tutto sia corretto ma non ci sia alcuna versione come quella scelta
-    out_print=to_hypoinverse(pick_P,pick_S,amps,eid,or_id_to_write,version_name)
-    for item in out_print:
-        print(item)
-sys.exit(0)
+    eo["id_locator"] = id_localspace
+    eo["type_event"] = type_event
+    eo["provenance_name"] = provenance_name_
+    eo["provenance_instance"] = localspace_name
+    or_id_to_write=oid
+    version_name=o['type_origin']['version_name'] 
+    version_number=o['type_origin']['version_value']
+    oo = copy.deepcopy(hypocenter)
+    try:
+        oo['ot'] = origin['ot']
+    except:
+        pass
+    print(oo['ot'])
+#           try:
+#               oo['lat'] = origin['latitude']
+#           except:
+#               pass
+#           try:
+#               oo['lon'] = origin['longitude']
+#           except:
+#               pass
+#           try:
+#               oo['depth'] = origin['depth']
+#           except:
+#               pass
+#           if origin['depth_type'] == 'from location':
+#              oo['fix_depth'] = 0
+#           else:
+#              oo['fix_depth'] = 1
+#           # space time coordinates errors
+#           try:
+#               oo['err_ot']=origin['time_errors']['uncertainty']
+#           except:
+#               pass
+#           try:
+#               oo['err_lat']=(float(origin['latitude_errors']['uncertainty'])*(EARTH_RADIUS*2*math.pi))/360. # from degrees to km
+#           except:
+#               pass
+#           try:
+#               oo['err_lon']=(float(origin['longitude_errors']['uncertainty'])*EARTH_RADIUS*math.cos(float(origin['latitude'])*2*(math.pi/360.))*2*math.pi)/360. # from degrees to km
+#           except:
+#               pass
+#           try:
+#               oo['err_depth']=float(origin['depth_errors']['uncertainty'])/1000.
+#           except:
+#               pass
+#           try:
+#               oo['err_h'] = float(origin['origin_uncertainty']['horizontal_uncertainty'])/1000.
+#           except:
+#               pass
+#           try:
+#               oo['err_z'] = oo['err_depth']
+#           except:
+#               pass
+#           ######### i prossimi tre valori commentati sono legati in modo NON bidirezionale ai valori dell'ellissoide
+#           #1 min_ho_un = origin['origin_uncertainty']['min_horizontal_uncertainty']
+#           #2 max_ho_un = origin['origin_uncertainty']['max_horizontal_uncertainty']
+#           #3 az_max_ho_un = origin['origin_uncertainty']['azimuth_max_horizontal_uncertainty']
+#           #4 pref_desc = origin['origin_uncertainty']['preferred_description']
+#           try:
+#               oo['confidence_lev'] = origin['origin_uncertainty']['confidence_level']
+#           except:
+#               pass
+#           try:
+#               oo['min_distance'] = origin['quality']['minimum_distance']
+#           except:
+#               pass
+#           try:
+#               oo['max_distance'] = origin['quality']['maximum_distance']
+#           except:
+#               pass
+#           try:
+#               oo['azim_gap'] = origin['quality']['azimuthal_gap']
+#           except:
+#               pass
+#           try:
+#               oo['rms'] = origin['quality']['standard_error']
+#           except:
+#               pass
+#           try:
+#               oo['model'] = origin['earth_model_id']
+#           except:
+#               pass
+#           oo['provenance_name'] = origin['creation_info']['agency_id']
+#           oo['provenance_istance'] = origin['creation_info']['author']
+#           #oo[''] = origin['quality']['']
+#           #sys.exit()
+#    #    print(origin['creation_info']['version'])
+#           P_count_all=0
+#           S_count_all=0
+#           P_count_use=0
+#           S_count_use=0
+#           Pol_count=0
+#           pick_P = {}
+#           pick_S = {}
+#           arrivals=list(origin['arrivals'])
+#           for pick in evdict['picks']:
+#               po = copy.deepcopy(phase)
+#               #for k, v in pick.items():
+#               #    print(k,v)
+#               po['arr_time_is_used']=0
+#               pick_id=str(pick['resource_id']).split('=')[-1]
+#               try:
+#                   po['isc_code']      = pick['phase_hint']
+#               except:
+#                   pass
+#               try:
+#                   po['scnl_net']      = pick['waveform_id']['network_code']
+#               except:
+#                   pass
+#               try:
+#                   po['scnl_sta']      = pick['waveform_id']['station_code']
+#               except:
+#                   pass
+#               try:
+#                   po['scnl_cha']      = pick['waveform_id']['channel_code']
+#               except:
+#                   pass
+#               try:
+#                   po['arrival_time']  = pick['time']
+#               except:
+#                   pass
+#               try:
+#                   po['weight_picker'] = convert_sispick_quality(pick['time_errors']['uncertainty'])
+#               except:
+#                   low_unc=float(pick['time_errors']['lower_uncertainty'])
+#                   up_unc=float(pick['time_errors']['upper_uncertainty'])
+#                   po['weight_picker'] = convert_sispick_quality((low_unc+up_unc))
+#               try:
+#                   po['firstmotion']   = polarity_qml2hypo(pick['polarity'])
+#               except:
+#                   pass
+#               try:
+#                   po['emersio']       = onset_qml2hypo(pick['onset'])
+#               except:
+#                   pass
+#               try:
+#                   if pick['waveform_id']['location_code'] == "":
+#                      po['scnl_loc'] = "--"
+#                   else:
+#                      po['scnl_loc'] = pick['waveform_id']['location_code']
+#               except:
+#                   pass
+#               try:
+#                   if pick['polarity'] != "undecidable" and pick['polarity'] != "":
+#                      Pol_count += 1
+#               except:
+#                   pass
+#               #print(arrival)
+#               #print(pick)
+#               for arrival in arrivals:
+#                   #for k, v in arrival.items():
+#                   #    #print(k)
+#                   #    print(k, v)
+#                   a_pick_id=str(arrival['pick_id']).split('=')[-1]
+#                   if a_pick_id == pick_id:
+#                      try:
+#                          po['arr_time_is_used']=1
+#                      except:
+#                          pass
+#                      #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
+#                      try:
+#                          po['isc_code']      = arrival['phase'][0]
+#                      except:
+#                          pass
+#                      #print("SI ",arrival['phase'],pick['time'],pick['waveform_id']['station_code'])
+#                      try:
+#                          po['ep_distance']   = float(arrival['distance'])*111.1949 # questo calcolo e' approssimato e non rapportato alla latitudone
+#                      except:
+#                          po['ep_distance']   = arrival['distance']
+#                      try:
+#                          po['azimut']        = arrival['azimuth']
+#                      except:
+#                          pass
+#                      try:
+#                          po['take_off']      = arrival['takeoff_angle']
+#                      except:
+#                          pass
+#                      try:
+#                          po['weight_phase_localization'] = arrival['time_weight']
+#                      except:
+#                          pass
+#                      try:
+#                          po['residual'] = arrival['time_residual']
+#                      except:
+#                          pass
+#                      try:
+#                          if arrival['phase'][0] == 'P' or arrival['phase'][0] == 'p':
+#                             P_count_all += 1 
+#                             if arrival['time_weight'] > 0:
+#                                P_count_use += 1
+#                      except:
+#                          pass
+#                      try:
+#                          if arrival['phase'][0] == 'S' or arrival['phase'][0] == 's':
+#                             S_count_all += 1 
+#                             if arrival['time_weight'] > 0:
+#                                S_count_use += 1
+#                      except:
+#                          pass
+#               #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
+#               # Writing the Pick into the picks dictionary based on the sta and net key (for reuse in formatting steps)
+#               if po['arr_time_is_used'] == 1:
+#                  pick_key= str(po['scnl_net']) + "_" + str(po['scnl_sta'])
+#                  if str(po['isc_code']).lower() == 'p':
+#                     pick_P[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
+#                  if str(po['isc_code']).lower() == 's':
+#                     pick_S[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
+#                  oo["phases"].append(po)
+#           oo['nph'] = P_count_use+S_count_use
+#           oo['nph_s'] = S_count_use
+#           oo['nph_tot'] = P_count_all+S_count_all
+#           oo['nph_fm'] = Pol_count
+#           amps = {}
+#           for mag in evdict['magnitudes']:
+#               m_or_id=str(mag['origin_id']).split('=')[-1]
+#               if m_or_id == or_id:
+#                  mm = copy.deepcopy(magnitude)
+#                  #for k, v in mag.items():
+#                  #    print(k, v)
+#                  #pass
+#                  mm['mag'] = mag['mag']
+#                  mm['type_magnitude'] = mag['magnitude_type']
+#                  mm['err'] = mag['mag_errors']['uncertainty']
+#                  mm['nsta_used'] = mag['station_count']
+#                  mm['provenance_name'] = mag['creation_info']['agency_id']
+#                  mm['provenance_instance'] = mag['creation_info']['author']
+#                  #print(mm['mag'],mm['type_magnitude'])
+#                  for sta_mag in evdict['station_magnitudes']:
+#                      sm_or_id=str(sta_mag['origin_id']).split('=')[-1]
+#                      sm_am_id=str(sta_mag['amplitude_id']).split('=')[-1]
+#                      if sm_or_id == or_id:
+#                         #print(sta_mag)
+#                         am = copy.deepcopy(amplitude)
+#                         am['type_magnitude'] = sta_mag['station_magnitude_type']
+#                         am['mag'] = sta_mag['mag']
+#                         am['is_used'] = 1
+#                         #print(sta_mag)
+#                         #print(sta_mag['comments'])
+#                         #for k, v in sta_mag.items():
+#                         #    print(k, v)
+#                         for amp in evdict['amplitudes']:
+#                             #for k, v in amplitude.items():
+#                             #    print(k, v)
+#                             am_id=str(amp['resource_id']).split('=')[-1]
+#                             am_or_id=str(sta_mag['amplitude_id']).split('=')[-1]
+#                             if amp['unit'] == 'm':
+#                                a_mul=1000.
+#                             else:
+#                                a_mul=1.
+#                             if sm_am_id == am_id:
+#                                try:
+#                                    beg=float(amp['time_window']['begin'])
+#                                    end=float(amp['time_window']['end'])
+#                                    a_t_ref=amp['time_window']['reference']
+#                                    if beg == 0 and end != 0:
+#                                       am['time1'] = a_t_ref
+#                                       am['amp1'] = str(float(amp['generic_amplitude']))
+#                                       am['period1'] = amp['period']
+#                                    elif beg != 0 and end == 0:
+#                                       am['time2'] = a_t_ref
+#                                       am['amp2'] = str(float(amp['generic_amplitude']))
+#                                       am['period2'] = amp['period']
+#                                except:
+#                                    pass
+#                                am['type_amplitude'] = amp['type']
+#                                am['scnl_net'] = amp['waveform_id']['network_code']
+#                                am['scnl_sta'] = amp['waveform_id']['station_code']
+#                                am['scnl_cha'] = amp['waveform_id']['channel_code']
+#                                am['scnl_loc'] = amp['waveform_id']['location_code']
+#                                #print(am['scnl_net'],am['scnl_sta'],am['scnl_cha'])
+#                                try:
+#                                    am['provenance_instance'] = amp['creation_info']['author']
+#                                except:
+#                                    pass
+#                                try:
+#                                    am['provenance_name'] = amp['creation_info']['agency_id']
+#                                except:
+#                                    pass
+#
+#                                amps_key= str(am['scnl_net']) + "_" + str(am['scnl_sta']) + "_" + str(am['scnl_cha'])
+#                                amps[str(amps_key)] = [str(am['scnl_sta']),str(am['scnl_net']),str(am['scnl_loc']),str(am['scnl_cha']),str(float(amp['generic_amplitude'])*float(a_mul)),str(amp['period'])]
+#                         mm["amplitudes"].append(am)
+#                  oo["magnitudes"].append(mm)
+#           eo["data"]["event"]["hypocenters"].append(oo) # push oggetto oo in hypocenters
+#    if not version_found:
+#       sys.stderr.write("Chosen version doesnt match any origin id")
+#       sys.exit(202) # Il codice 202 e' stato scelto per identificare il caso in cui tutto sia corretto ma non ci sia alcuna versione come quella scelta
+#    out_print=to_hypoinverse(pick_P,pick_S,amps,eid,or_id_to_write,version_name)
+#    for item in out_print:
+#        print(item)
+#sys.exit(0)
