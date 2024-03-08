@@ -14,7 +14,7 @@ from datetime import datetime
 import pandas
 
 ## the imports of Obspy are all for version 1.1 and greater
-#from obspy import read, UTCDateTime
+from obspy import UTCDateTime
 #from obspy.core.event import Catalog, Event, Magnitude, Origin, Arrival, Pick
 #from obspy.core.event import ResourceIdentifier, CreationInfo, WaveformStreamID
 #try:
@@ -297,7 +297,7 @@ def to_hypoinverse(pP,pS,a,eid,oid,ver):
     phs=[]
     for k,v in pP.items():
         hi_line = "x" * 110
-        p_used=True if v[7] == '1' else False
+        p_used= v[7]
         p_tim = UTCDateTime(v[6])
         if p_used:
            pol=" " if v[4] == "null" or v[4] == "" else v[4]
@@ -316,7 +316,7 @@ def to_hypoinverse(pP,pS,a,eid,oid,ver):
            elif len(v[0]) == 3:
               hi_line = v[0] + "xx" + v[3] + pol + wei + com + Ptime + hi_line[24:]
            try:
-               s_used=True if pS[k][7] == '1' else False
+               s_used = pS[k][7]
            except:
                s_used=False
                pass
@@ -343,7 +343,7 @@ def to_hypoinverse(pP,pS,a,eid,oid,ver):
               amp_present=False
               pass
            idlen=len(str(eid))
-           oridlen=len(str(or_id))
+           oridlen=len(str(oid))
            verlen=len(str(ver))
            hi_line=hi_line.replace('x',' ')
            hi_line=hi_line[:89] + "EVID:" + str(eid) + ",ORID:" + str(oid) + ",V:" + str(ver)
@@ -494,283 +494,256 @@ if origin_found:
         oo['ot'] = origin['ot']
     except:
         pass
-    print(oo['ot'])
-#           try:
-#               oo['lat'] = origin['latitude']
-#           except:
-#               pass
-#           try:
-#               oo['lon'] = origin['longitude']
-#           except:
-#               pass
-#           try:
-#               oo['depth'] = origin['depth']
-#           except:
-#               pass
-#           if origin['depth_type'] == 'from location':
-#              oo['fix_depth'] = 0
-#           else:
-#              oo['fix_depth'] = 1
-#           # space time coordinates errors
-#           try:
-#               oo['err_ot']=origin['time_errors']['uncertainty']
-#           except:
-#               pass
-#           try:
-#               oo['err_lat']=(float(origin['latitude_errors']['uncertainty'])*(EARTH_RADIUS*2*math.pi))/360. # from degrees to km
-#           except:
-#               pass
-#           try:
-#               oo['err_lon']=(float(origin['longitude_errors']['uncertainty'])*EARTH_RADIUS*math.cos(float(origin['latitude'])*2*(math.pi/360.))*2*math.pi)/360. # from degrees to km
-#           except:
-#               pass
-#           try:
-#               oo['err_depth']=float(origin['depth_errors']['uncertainty'])/1000.
-#           except:
-#               pass
-#           try:
-#               oo['err_h'] = float(origin['origin_uncertainty']['horizontal_uncertainty'])/1000.
-#           except:
-#               pass
-#           try:
-#               oo['err_z'] = oo['err_depth']
-#           except:
-#               pass
-#           ######### i prossimi tre valori commentati sono legati in modo NON bidirezionale ai valori dell'ellissoide
-#           #1 min_ho_un = origin['origin_uncertainty']['min_horizontal_uncertainty']
-#           #2 max_ho_un = origin['origin_uncertainty']['max_horizontal_uncertainty']
-#           #3 az_max_ho_un = origin['origin_uncertainty']['azimuth_max_horizontal_uncertainty']
-#           #4 pref_desc = origin['origin_uncertainty']['preferred_description']
-#           try:
-#               oo['confidence_lev'] = origin['origin_uncertainty']['confidence_level']
-#           except:
-#               pass
-#           try:
-#               oo['min_distance'] = origin['quality']['minimum_distance']
-#           except:
-#               pass
-#           try:
-#               oo['max_distance'] = origin['quality']['maximum_distance']
-#           except:
-#               pass
-#           try:
-#               oo['azim_gap'] = origin['quality']['azimuthal_gap']
-#           except:
-#               pass
-#           try:
-#               oo['rms'] = origin['quality']['standard_error']
-#           except:
-#               pass
-#           try:
-#               oo['model'] = origin['earth_model_id']
-#           except:
-#               pass
-#           oo['provenance_name'] = origin['creation_info']['agency_id']
-#           oo['provenance_istance'] = origin['creation_info']['author']
-#           #oo[''] = origin['quality']['']
-#           #sys.exit()
-#    #    print(origin['creation_info']['version'])
-#           P_count_all=0
-#           S_count_all=0
-#           P_count_use=0
-#           S_count_use=0
-#           Pol_count=0
-#           pick_P = {}
-#           pick_S = {}
-#           arrivals=list(origin['arrivals'])
-#           for pick in evdict['picks']:
-#               po = copy.deepcopy(phase)
-#               #for k, v in pick.items():
-#               #    print(k,v)
-#               po['arr_time_is_used']=0
-#               pick_id=str(pick['resource_id']).split('=')[-1]
-#               try:
-#                   po['isc_code']      = pick['phase_hint']
-#               except:
-#                   pass
-#               try:
-#                   po['scnl_net']      = pick['waveform_id']['network_code']
-#               except:
-#                   pass
-#               try:
-#                   po['scnl_sta']      = pick['waveform_id']['station_code']
-#               except:
-#                   pass
-#               try:
-#                   po['scnl_cha']      = pick['waveform_id']['channel_code']
-#               except:
-#                   pass
-#               try:
-#                   po['arrival_time']  = pick['time']
-#               except:
-#                   pass
-#               try:
-#                   po['weight_picker'] = convert_sispick_quality(pick['time_errors']['uncertainty'])
-#               except:
-#                   low_unc=float(pick['time_errors']['lower_uncertainty'])
-#                   up_unc=float(pick['time_errors']['upper_uncertainty'])
-#                   po['weight_picker'] = convert_sispick_quality((low_unc+up_unc))
-#               try:
-#                   po['firstmotion']   = polarity_qml2hypo(pick['polarity'])
-#               except:
-#                   pass
-#               try:
-#                   po['emersio']       = onset_qml2hypo(pick['onset'])
-#               except:
-#                   pass
-#               try:
-#                   if pick['waveform_id']['location_code'] == "":
-#                      po['scnl_loc'] = "--"
-#                   else:
-#                      po['scnl_loc'] = pick['waveform_id']['location_code']
-#               except:
-#                   pass
-#               try:
-#                   if pick['polarity'] != "undecidable" and pick['polarity'] != "":
-#                      Pol_count += 1
-#               except:
-#                   pass
-#               #print(arrival)
-#               #print(pick)
-#               for arrival in arrivals:
-#                   #for k, v in arrival.items():
-#                   #    #print(k)
-#                   #    print(k, v)
-#                   a_pick_id=str(arrival['pick_id']).split('=')[-1]
-#                   if a_pick_id == pick_id:
-#                      try:
-#                          po['arr_time_is_used']=1
-#                      except:
-#                          pass
-#                      #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
-#                      try:
-#                          po['isc_code']      = arrival['phase'][0]
-#                      except:
-#                          pass
-#                      #print("SI ",arrival['phase'],pick['time'],pick['waveform_id']['station_code'])
-#                      try:
-#                          po['ep_distance']   = float(arrival['distance'])*111.1949 # questo calcolo e' approssimato e non rapportato alla latitudone
-#                      except:
-#                          po['ep_distance']   = arrival['distance']
-#                      try:
-#                          po['azimut']        = arrival['azimuth']
-#                      except:
-#                          pass
-#                      try:
-#                          po['take_off']      = arrival['takeoff_angle']
-#                      except:
-#                          pass
-#                      try:
-#                          po['weight_phase_localization'] = arrival['time_weight']
-#                      except:
-#                          pass
-#                      try:
-#                          po['residual'] = arrival['time_residual']
-#                      except:
-#                          pass
-#                      try:
-#                          if arrival['phase'][0] == 'P' or arrival['phase'][0] == 'p':
-#                             P_count_all += 1 
-#                             if arrival['time_weight'] > 0:
-#                                P_count_use += 1
-#                      except:
-#                          pass
-#                      try:
-#                          if arrival['phase'][0] == 'S' or arrival['phase'][0] == 's':
-#                             S_count_all += 1 
-#                             if arrival['time_weight'] > 0:
-#                                S_count_use += 1
-#                      except:
-#                          pass
-#               #print(pick_id,a_pick_id,pick['waveform_id']['station_code'],pick['phase_hint'],po['arr_time_is_used'])
-#               # Writing the Pick into the picks dictionary based on the sta and net key (for reuse in formatting steps)
-#               if po['arr_time_is_used'] == 1:
-#                  pick_key= str(po['scnl_net']) + "_" + str(po['scnl_sta'])
-#                  if str(po['isc_code']).lower() == 'p':
-#                     pick_P[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
-#                  if str(po['isc_code']).lower() == 's':
-#                     pick_S[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
-#                  oo["phases"].append(po)
-#           oo['nph'] = P_count_use+S_count_use
-#           oo['nph_s'] = S_count_use
-#           oo['nph_tot'] = P_count_all+S_count_all
-#           oo['nph_fm'] = Pol_count
-#           amps = {}
-#           for mag in evdict['magnitudes']:
-#               m_or_id=str(mag['origin_id']).split('=')[-1]
-#               if m_or_id == or_id:
-#                  mm = copy.deepcopy(magnitude)
-#                  #for k, v in mag.items():
-#                  #    print(k, v)
-#                  #pass
-#                  mm['mag'] = mag['mag']
-#                  mm['type_magnitude'] = mag['magnitude_type']
-#                  mm['err'] = mag['mag_errors']['uncertainty']
-#                  mm['nsta_used'] = mag['station_count']
-#                  mm['provenance_name'] = mag['creation_info']['agency_id']
-#                  mm['provenance_instance'] = mag['creation_info']['author']
-#                  #print(mm['mag'],mm['type_magnitude'])
-#                  for sta_mag in evdict['station_magnitudes']:
-#                      sm_or_id=str(sta_mag['origin_id']).split('=')[-1]
-#                      sm_am_id=str(sta_mag['amplitude_id']).split('=')[-1]
-#                      if sm_or_id == or_id:
-#                         #print(sta_mag)
-#                         am = copy.deepcopy(amplitude)
-#                         am['type_magnitude'] = sta_mag['station_magnitude_type']
-#                         am['mag'] = sta_mag['mag']
-#                         am['is_used'] = 1
-#                         #print(sta_mag)
-#                         #print(sta_mag['comments'])
-#                         #for k, v in sta_mag.items():
-#                         #    print(k, v)
-#                         for amp in evdict['amplitudes']:
-#                             #for k, v in amplitude.items():
-#                             #    print(k, v)
-#                             am_id=str(amp['resource_id']).split('=')[-1]
-#                             am_or_id=str(sta_mag['amplitude_id']).split('=')[-1]
-#                             if amp['unit'] == 'm':
-#                                a_mul=1000.
-#                             else:
-#                                a_mul=1.
-#                             if sm_am_id == am_id:
-#                                try:
-#                                    beg=float(amp['time_window']['begin'])
-#                                    end=float(amp['time_window']['end'])
-#                                    a_t_ref=amp['time_window']['reference']
-#                                    if beg == 0 and end != 0:
-#                                       am['time1'] = a_t_ref
-#                                       am['amp1'] = str(float(amp['generic_amplitude']))
-#                                       am['period1'] = amp['period']
-#                                    elif beg != 0 and end == 0:
-#                                       am['time2'] = a_t_ref
-#                                       am['amp2'] = str(float(amp['generic_amplitude']))
-#                                       am['period2'] = amp['period']
-#                                except:
-#                                    pass
-#                                am['type_amplitude'] = amp['type']
-#                                am['scnl_net'] = amp['waveform_id']['network_code']
-#                                am['scnl_sta'] = amp['waveform_id']['station_code']
-#                                am['scnl_cha'] = amp['waveform_id']['channel_code']
-#                                am['scnl_loc'] = amp['waveform_id']['location_code']
-#                                #print(am['scnl_net'],am['scnl_sta'],am['scnl_cha'])
-#                                try:
-#                                    am['provenance_instance'] = amp['creation_info']['author']
-#                                except:
-#                                    pass
-#                                try:
-#                                    am['provenance_name'] = amp['creation_info']['agency_id']
-#                                except:
-#                                    pass
-#
-#                                amps_key= str(am['scnl_net']) + "_" + str(am['scnl_sta']) + "_" + str(am['scnl_cha'])
-#                                amps[str(amps_key)] = [str(am['scnl_sta']),str(am['scnl_net']),str(am['scnl_loc']),str(am['scnl_cha']),str(float(amp['generic_amplitude'])*float(a_mul)),str(amp['period'])]
-#                         mm["amplitudes"].append(am)
-#                  oo["magnitudes"].append(mm)
-#           eo["data"]["event"]["hypocenters"].append(oo) # push oggetto oo in hypocenters
-#    if not version_found:
-#       sys.stderr.write("Chosen version doesnt match any origin id")
-#       sys.exit(202) # Il codice 202 e' stato scelto per identificare il caso in cui tutto sia corretto ma non ci sia alcuna versione come quella scelta
-#    out_print=to_hypoinverse(pick_P,pick_S,amps,eid,or_id_to_write,version_name)
-#    for item in out_print:
-#        print(item)
-#sys.exit(0)
+    try:
+        oo['lat'] = origin['lat']
+    except:
+        pass
+    try:
+        oo['lon'] = origin['lon']
+    except:
+        pass
+    try:
+        oo['depth'] = origin['depth']
+    except:
+        pass
+    if origin['fix_depth']:
+       oo['fix_depth'] = 1
+    else:
+       oo['fix_depth'] = 0
+    # space time coordinates errors
+    try:
+        oo['err_ot']=origin['err_ot']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['err_lat']=(float(origin['err_lat_deg'])*(EARTH_RADIUS*2*math.pi))/360. # from degrees to km
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['err_lon']=(float(origin['err_lon_deg'])*EARTH_RADIUS*math.cos(float(origin['lat'])*2*(math.pi/360.))*2*math.pi)/360. # from degrees to km
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['err_depth']=float(origin['err_depth'])
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['err_h'] = float(origin['err_h'])
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['err_z'] = float(origin['err_z'])
+    except Exception as e:
+        print('err_z: ',e)
+        pass
+#   ######### i prossimi tre valori commentati sono legati in modo NON bidirezionale ai valori dell'ellissoide
+#   #1 min_ho_un = origin['origin_uncertainty']['min_horizontal_uncertainty']
+#   #2 max_ho_un = origin['origin_uncertainty']['max_horizontal_uncertainty']
+#   #3 az_max_ho_un = origin['origin_uncertainty']['azimuth_max_horizontal_uncertainty']
+#   #4 pref_desc = origin['origin_uncertainty']['preferred_description']
+    try:
+        oo['confidence_lev'] = origin['confidence_level']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['min_distance'] = origin['min_distance']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['med_distance'] = origin['med_distance']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['max_distance'] = origin['max_distance']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['azim_gap'] = origin['azim_gap']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['rms'] = origin['rms']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['w_rms'] = origin['w_rms']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['is_centroid'] = origin['is_centroid']
+    except Exception as e:
+        print(e)
+        pass
+    try:
+        oo['model'] = origin['provenance']['model']
+    except Exception as e:
+        print(e)
+        pass
+    oo['provenance_name'] = origin['provenance']['name']
+    oo['provenance_istance'] = origin['type_origin']['version_name']
+    oo['quality'] = origin['quality']
+    oo['quality_numeric'] = origin['quality_numeric']
+    
+    P_count_all=0
+    S_count_all=0
+    P_count_use=0
+    S_count_use=0
+    Pol_count=0
+    pick_P = {}
+    pick_S = {}
+    for pick in origin['arrivals']:
+        po = copy.deepcopy(phase)
+        po['arr_time_is_used']=pick['arr_time_is_used']
+        pick_id=pick['id']
+        try:
+            po['isc_code']      = pick['isc_code']
+        except Exception as e:
+            print(e)
+            pass
+        if po['isc_code'].lower()[0] == 'p':
+           P_count_all += 1 
+           if po['arr_time_is_used']:
+              P_count_use += 1
+        if po['isc_code'].lower()[0] == 's':
+           S_count_all += 1 
+           if po['arr_time_is_used']:
+              S_count_use += 1
+        try:
+            po['scnl_net']      = pick['pick']['net']
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            po['scnl_sta']      = pick['pick']['sta']
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            po['scnl_cha']      = pick['pick']['cha']
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            po['scnl_loc'] = pick['pick']['loc']
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            po['arrival_time']  = pick['pick']['arrival_time']
+        except Exception as e:
+            print(e)
+            pass
+        low_unc=float(pick['pick']['lower_uncertainty']) if pick['pick']['lower_uncertainty'] else pick['pick']['lower_uncertainty']
+        up_unc=float(pick['pick']['upper_uncertainty']) if pick['pick']['upper_uncertainty'] else pick['pick']['upper_uncertainty']
+        if low_unc and up_unc:
+            po['weight_picker'] = convert_sispick_quality((low_unc+up_unc))
+            #print("Weight from uncertainties",po['weight_picker'])
+        else:
+            po['weight_picker'] = pick['pick']['quality_class']
+            #print("Weight from file",po['weight_picker'])
+        try:
+            #po['firstmotion'] = polarity_qml2hypo(pick['polarity'])
+            if pick['pick']['firstmotion']:
+               Pol_count += 1
+               po['firstmotion'] = pick['pick']['firstmotion']
+               #print("polarity nr ",Pol_count,po['firstmotion'])
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            #po['emersio'] = onset_qml2hypo(pick['onset'])
+            if pick['pick']['emersio']:
+               po['emersio'] = pick['pick']
+        except Exception as e:
+            print(e)
+            pass
+        try:
+            po['ep_distance_km']   = pick['ep_distance_km']
+        except:
+            po['ep_distance_delta']   = pick['ep_distance_delta']
+        try:
+            po['azimut']        = pick['azimut']
+        except:
+            pass
+        try:
+            po['take_off']      = pick['take_off']
+        except:
+            pass
+        try:
+            po['weight_phase_localization'] = pick['weight']
+        except:
+            pass
+        try:
+            po['residual'] = pick['residual']
+        except:
+            pass
+        # Writing the Pick into the picks dictionary based on the sta and net key (for reuse in formatting steps)
+        if po['arr_time_is_used'] == 1:
+           pick_key= str(po['scnl_net']) + "_" + str(po['scnl_sta'])
+           if str(po['isc_code']).lower() == 'p':
+              pick_P[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
+           if str(po['isc_code']).lower() == 's':
+              pick_S[str(pick_key)] = [str(po['scnl_sta']),str(po['scnl_net']),str(po['scnl_loc']),str(po['isc_code']),str(po['firstmotion']),str(po['weight_picker']),str(po['arrival_time']),str(po['arr_time_is_used']),str(po['scnl_cha'])]
+    oo["phases"].append(po)
+    oo['nph'] = P_count_use+S_count_use
+    oo['nph_s'] = S_count_use
+    oo['nph_tot'] = P_count_all+S_count_all
+    oo['nph_fm'] = Pol_count
+    for mag in origin['magnitudes']:
+        mm = copy.deepcopy(magnitude)
+        mm['mag'] = mag['mag']
+        mm['type_magnitude'] = mag['type_magnitude']
+        mm['err'] = (float(mag['lower_uncertainty'])+float(mag['upper_uncertainty']))/2
+        mm['nsta_used'] = mag['nsta_used']
+        mm['provenance_name'] = mag['provenance']['name']
+        mm['provenance_instance'] = mag['localspace']['name']
+        amps={}
+        for sta_mag in mag['stationmagnitudes']:
+            am = copy.deepcopy(amplitude)
+            am['type_magnitude'] = sta_mag['type_magnitude']
+            am['mag'] = sta_mag['mag']
+            am['is_used'] = 1 if sta_mag['is_used'] else 0
+            if sta_mag['amplitude']['type_amplitude']['unit'] == 'm':
+               a_mul=1000.
+            else:
+               a_mul=1.
+            am['time1'] = sta_mag['amplitude']['time1']
+            am['amp1'] = sta_mag['amplitude']['amp1']
+            am['period1'] = sta_mag['amplitude']['period']
+            am['time2'] = sta_mag['amplitude']['time1']
+            am['amp2'] = sta_mag['amplitude']['amp1']
+            am['period'] = sta_mag['amplitude']['period']
+            am['type_amplitude'] = sta_mag['amplitude']['type_amplitude']['name']
+            am['scnl_net'] = sta_mag['amplitude']['net']
+            am['scnl_sta'] = sta_mag['amplitude']['sta']
+            am['scnl_cha'] = sta_mag['amplitude']['cha']
+            am['scnl_loc'] = sta_mag['amplitude']['loc']
+            am['provenance_name'] = sta_mag['amplitude']['provenance']['name']
+            am['provenance_instance'] = sta_mag['amplitude']['localspace']['name']
+            am['provenance_software'] = sta_mag['amplitude']['provenance']['program']
+            am['evalueation_mode'] = sta_mag['amplitude']['provenance']['evaluationmode']
+            amps_key= str(am['scnl_net']) + "_" + str(am['scnl_sta']) + "_" + str(am['scnl_cha'])
+            half_pp_amp_mm = ((abs(float(am['amp1']))+abs(float(am['amp2'])))/2)*a_mul
+            amps[str(amps_key)] = [str(am['scnl_sta']),str(am['scnl_net']),str(am['scnl_loc']),str(am['scnl_cha']),str(half_pp_amp_mm),str(am['period'])]
+            mm["amplitudes"].append(am)
+        oo["magnitudes"].append(mm)
+    eo["data"]["event"]["hypocenters"].append(oo) # push oggetto oo in hypocenters
+if not origin_found:
+   sys.stderr.write("Chosen version doesnt match any origin id")
+   sys.exit(202) # Il codice 202 e' stato scelto per identificare il caso in cui tutto sia corretto ma non ci sia alcuna versione come quella scelta
+out_print=to_hypoinverse(pick_P,pick_S,amps,eid,or_id_to_write,version_number)
+for item in out_print:
+    print(item)
+sys.exit(0)
